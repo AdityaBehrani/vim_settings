@@ -1,0 +1,105 @@
+# ============================================================
+#  .kuberc — Aliases, functions & helpers for kubectl
+#  To activate:  source ~/.kuberc  (or add to ~/.bashrc)
+# ============================================================
+
+# -- Short alias for kubectl
+alias k='kubectl'
+
+# ============================================================
+# Basic Shortcuts
+# ============================================================
+alias kg='kubectl get'
+alias kd='kubectl describe'
+alias krm='kubectl delete'
+alias kap='kubectl apply -f'
+alias kdr='kubectl delete -f'
+alias kctx='kubectl config use-context'
+alias kc='kubectl config current-context'
+alias kctxs='kubectl config get-contexts'
+alias kns='kubectl config set-context --current --namespace'
+
+# ============================================================
+# Common Get Commands
+# ============================================================
+alias kgp='kubectl get pods'
+alias kgs='kubectl get svc'
+alias kgn='kubectl get nodes'
+alias kgd='kubectl get deployments'
+alias kgi='kubectl get ingress'
+alias kgc='kubectl get configmap'
+
+# ============================================================
+# Describe / Logs / Debug
+# ============================================================
+alias kdp='kubectl describe pod'
+alias kl='kubectl logs'
+alias klf='kubectl logs -f'
+alias kpf='kubectl port-forward'
+alias kfail='kubectl get pods --field-selector=status.phase!=Running'
+
+# ============================================================
+# Bulk / Force Actions
+# ============================================================
+alias krmp='kubectl delete pod --grace-period=0 --force'
+alias krma='kubectl delete all --all'
+
+# ============================================================
+# Namespace / Context Helpers
+# ============================================================
+alias kn='kubectl config view --minify --output "jsonpath={..namespace}"'
+
+# If fzf is installed, use it to quickly switch contexts/namespaces
+if command -v fzf >/dev/null 2>&1; then
+  kctx() {
+    local ctx
+    ctx=$(kubectl config get-contexts -o name | fzf --height 40% --reverse --prompt='Context> ')
+    [ -n "$ctx" ] && kubectl config use-context "$ctx"
+  }
+
+  kns() {
+    local ns
+    ns=$(kubectl get ns -o name | fzf --height 40% --reverse --prompt='Namespace> ')
+    [ -n "$ns" ] && kubectl config set-context --current --namespace "${ns#namespace/}"
+  }
+fi
+
+# ============================================================
+# Helper Functions
+# ============================================================
+
+# Execute into a pod easily: kexec <pod> <command>
+kexec() {
+  if [ -z "$1" ]; then
+    echo "Usage: kexec <pod> [command...]"
+    return 1
+  fi
+  kubectl exec -it "$1" -- "${@:2}"
+}
+
+# Find a pod name by pattern: kpod nginx
+kpod() {
+  kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep "$1"
+}
+
+# Stream logs by pattern: klgrep nginx
+klgrep() {
+  local pod
+  pod=$(kubectl get pods | grep "$1" | awk '{print $1}' | head -n 1)
+  [ -n "$pod" ] && kubectl logs -f "$pod" || echo "No pod found for pattern: $1"
+}
+
+# ============================================================
+# Optional: Prompt customization
+# ============================================================
+# Shows current context and namespace in your shell prompt
+# Uncomment the next line if you want this:
+# export PS1='[\u@\h \W $(kubectl config current-context 2>/dev/null | cut -d"/" -f2):$(kubectl config view --minify --output "jsonpath={..namespace}" 2>/dev/null)]$ '
+
+# ============================================================
+# Autocompletion (if available)
+# ============================================================
+if command -v kubectl >/dev/null 2>&1; then
+  source <(kubectl completion bash 2>/dev/null)
+  complete -o default -F __start_kubectl k
+fi
